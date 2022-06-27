@@ -735,6 +735,41 @@ add_i2c_dynamic_bus_dev_connection_table()
 	connect_table+=(${dynamic_i2cbus_connection_table[@]})
 }
 
+start_mst_for_spc1_port_cpld()
+{
+	if [ ! -d /dev/mst ]; then
+		lsmod | grep mst_pci >/dev/null 2>&1
+		if [  $? -ne 0 ]; then
+			mst start  >/dev/null 2>&1
+		fi
+	fi
+}
+
+set_spc1_port_cpld()
+{
+	cpld=$(< $config_path/cpld_port)
+	if [ $cpld == "cpld3" ] && [ ! -f $system_path/cpld3_version ]; then
+		ver_dec=$CPLD3_VER_DEF
+		# check if mlxreg exists
+		if [ -x "$(command -v mlxreg)" ]; then
+			if [ ! -d /dev/mst ]; then
+				lsmod | grep mst_pci >/dev/null 2>&1
+				if [  $? -ne 0 ]; then
+					mst start  >/dev/null 2>&1
+					sleep 2
+				fi
+			fi
+			mt_dev=$(find /dev/mst -name *00_pciconf0)
+			cmd='mlxreg --reg_name MSCI  -d $mt_dev -g -i "index=2" | grep version | cut -d "|" -f2'
+			ver_hex=$(eval $cmd)
+			if [ ! -z "$ver_hex" ]; then
+				ver_dec=$(printf "%d" $ver_hex)
+			fi
+		fi
+		echo "$ver_dec" > $system_path/cpld3_version
+	fi
+}
+
 msn274x_specific()
 {
 	connect_table+=(${msn2740_base_connect_table[@]})
@@ -775,6 +810,8 @@ msn21xx_specific()
 
 msn24xx_specific()
 {
+	start_mst_for_spc1_port_cpld
+
 	connect_table+=(${msn2700_base_connect_table[@]})
 	add_cpu_board_to_connection_table
 
@@ -801,10 +838,15 @@ msn24xx_specific()
 	echo cpld3 > $config_path/cpld_port
 
 	lm_sensors_config="$lm_sensors_configs_path/msn2700_sensors.conf"
+
+	set_spc1_port_cpld
+	cpld=$(< $config_path/cpld_port)
 }
 
 msn27xx_msb_msx_specific()
 {
+	start_mst_for_spc1_port_cpld
+
 	connect_table+=(${msn2700_base_connect_table[@]})
 	add_cpu_board_to_connection_table
 
@@ -838,6 +880,7 @@ msn27xx_msb_msx_specific()
 	esac
 
 	echo cpld3 > $config_path/cpld_port
+	set_spc1_port_cpld
 
 	lm_sensors_config="$lm_sensors_configs_path/msn2700_sensors.conf"
 	get_i2c_bus_frequency_default
@@ -1857,6 +1900,7 @@ do_start()
 			done
 		fi
 	fi
+	log_info "Init completed."
 }
 
 do_stop()

@@ -601,6 +601,110 @@ function get_i2c_voltmon_prefix()
 	echo "$voltmon_name"
 }
 
+function check_cpld_attrs_num()
+{
+	board=$(cat /sys/devices/virtual/dmi/id/board_name)
+	cpld_num=$(cat $config_path/cpld_num)
+	case "$board" in
+	VMOD0001|VMOD0003)
+		cpld_num=$((cpld_num-1))
+		;;
+	*)
+		;;
+	esac
+
+	return $cpld_num
+}
+
+function check_cpld_attrs()
+{
+	attrname="$1"
+	cpld_num="$2"
+	take=1
+
+	case "$cpld_num" in
+	1)
+		if [ "$attrname" == "cpld2_pn" ] || [ "$attrname" == "cpld2_version" ] ||
+		   [ "$attrname" == "cpld2_version_min" ]; then
+			take=0
+		fi
+		if [ "$attrname" == "cpld3_pn" ] || [ "$attrname" == "cpld3_version" ] ||
+		   [ "$attrname" == "cpld3_version_min" ]; then
+			take=0
+		fi
+		if [ "$attrname" == "cpld4_pn" ] || [ "$attrname" == "cpld4_version" ] ||
+		   [ "$attrname" == "cpld4_version_min" ]; then
+			take=0
+		fi
+		if [ "$attrname" == "cpld5_pn" ] || [ "$attrname" == "cpld5_version" ] ||
+		   [ "$attrname" == "cpld5_version_min" ]; then
+			take=0
+		fi
+		;;
+	2)
+		if [ "$attrname" == "cpld3_pn" ] || [ "$attrname" == "cpld3_version" ] ||
+		   [ "$attrname" == "cpld3_version_min" ]; then
+			take=0
+		fi
+		if [ "$attrname" == "cpld4_pn" ] || [ "$attrname" == "cpld4_version" ] ||
+		   [ "$attrname" == "cpld4_version_min" ]; then
+			take=0
+		fi
+		if [ "$attrname" == "cpld5_pn" ] || [ "$attrname" == "cpld5_version" ] ||
+		   [ "$attrname" == "cpld5_version_min" ]; then
+			take=0
+		fi
+		;;
+	3)
+		if [ "$attrname" == "cpld4_pn" ] || [ "$attrname" == "cpld4_version" ] ||
+		   [ "$attrname" == "cpld4_version_min" ]; then
+			take=0
+		fi
+		if [ "$attrname" == "cpld5_pn" ] || [ "$attrname" == "cpld5_version" ] ||
+		   [ "$attrname" == "cpld5_version_min" ]; then
+			take=0
+		fi
+		;;
+	4)
+		if [ "$attrname" == "cpld5_pn" ] || [ "$attrname" == "cpld5_version" ] ||
+		   [ "$attrname" == "cpld5_version_min" ]; then
+			take=0
+		fi
+		;;
+	5)
+		;;
+	*)
+		;;
+	esac
+
+	return $take
+}
+
+handle_cpld_versions()
+{
+	CPLD3_VER_DEF="0"
+	cpld_num_loc="${1}"
+
+	for ((i=1; i<=cpld_num_loc; i+=1)); do
+		if [ -f $system_path/cpld"$i"_pn ]; then
+			cpld_pn=$(cat $system_path/cpld"$i"_pn)
+		fi
+		if [ -f $system_path/cpld"$i"_version ]; then
+			cpld_ver=$(cat $system_path/cpld"$i"_version)
+		fi
+		if [ -f $system_path/cpld"$i"_version_min ]; then
+			cpld_ver_min=$(cat $system_path/cpld"$i"_version_min)
+		fi
+		if [ -z "$str" ]; then
+			str=$(printf "CPLD%06d_REV%02d%02d" "$cpld_pn" "$cpld_ver" "$cpld_ver_min")
+		else
+			str=$str$(printf "_CPLD%06d_REV%02d%02d" "$cpld_pn" "$cpld_ver" "$cpld_ver_min")
+		fi
+	done
+	echo "$str" > $system_path/cpld_base
+	echo "$str" > $system_path/cpld
+}
+
 if [ "$1" == "add" ]; then
 	# Don't process udev events until service is started and directories are created
 	if [ ! -f ${udev_ready} ]; then
@@ -780,17 +884,24 @@ if [ "$1" == "add" ]; then
 			linecard="$linecard_num"
 			;;
 		esac
-		# Allow to driver insertion off all the attributes.
+		# Allow insertion of all the attributes, but skip redundant cpld entries.
 		sleep 1
 		if [ -d "$3""$4" ]; then
+			local cpld_num
 			for attrpath in "$3""$4"/*; do
+				take=10
 				attrname=$(basename "${attrpath}")
+				check_cpld_attrs_num
+				cpld_num=$?
+				check_cpld_attrs "$attrname" "$cpld_num"
+				take=$?
 				if [ ! -d "$attrpath" ] && [ ! -L "$attrpath" ] &&
 				   [ "$attrname" != "uevent" ] &&
-				   [ "$attrname" != "name" ]; then
+				   [ "$attrname" != "name" ] && [ "$take" -ne 0 ] ; then
 					ln -sf "$3""$4"/"$attrname" $system_path/"$attrname"
 				fi
 			done
+			handle_cpld_versions "$cpld_num"
 		fi
 		for ((i=1; i<=$(<$config_path/max_tachos); i+=1)); do
 			if [ -L $thermal_path/fan"$i"_status ]; then
