@@ -243,7 +243,7 @@ SENSOR_DEF_CONFIG = {
                         },
     r'sensor_amb':      {"type": "ambiant_thermal_sensor",
                          "pwm_min": 30, "pwm_max": 60, "val_min": 20000, "val_max": 50000, "poll_time": 30,
-                         "base_file_name": {CONST.C2P: CONST.FAN_SENS, CONST.P2C: CONST.PORT_SENS}, "value_hyst": 0, "input_smooth_level": 1
+                         "base_file_name": {CONST.C2P: CONST.PORT_SENS, CONST.P2C: CONST.FAN_SENS}, "value_hyst": 0, "input_smooth_level": 1
                         },
     r'psu\d+_temp':     {"type": "thermal_sensor",
                          "val_min": 45000, "val_max": 85000, "poll_time": 30, "enable": 0
@@ -1006,7 +1006,7 @@ class system_device(hw_managemet_file_op):
             default_val = int(default_val)
             val = self.get_file_val(filename, default_val)
         val /= scale
-        self.log.info("Set {} {} : {}".format(self.name, trh_type, val))
+        self.log.debug("Set {} {} : {}".format(self.name, trh_type, val))
         return int(val)
 
     # ----------------------------------------------------------------------
@@ -1275,9 +1275,8 @@ class thermal_module_sensor(system_device):
         # sensor error reading counter
         if self.check_reading_file_err():
             self.fault_list.append("sensor_read")
-            pwm = g_get_dmin(thermal_table, amb_tmp, [flow_dir, CONST.UNTRUSTED_ERR], interpolated=False)
+            pwm = g_get_dmin(thermal_table, amb_tmp, [flow_dir, "sensor_read_error"], interpolated=False)
             self.pwm = max(pwm, self.pwm)
-            self.fault_list.append(CONST.UNTRUSTED_ERR)
 
         self._update_pwm()
         return None
@@ -1584,7 +1583,6 @@ class fan_sensor(system_device):
             rpm_tolerance = float(fan_param.get("rpm_tolerance", CONST.FAN_RPM_TOLERANCE))/100
             pwm_min = int(fan_param["pwm_min"])
             slope = int(fan_param["slope"])
-            self.log.debug("{}:{} validate_rpm".format(self.name, fan_param))
             self.log.debug("Real:{} min:{} max:{} slope{} validate rpm".format(rpm_real, rpm_min, rpm_max, slope))
             # 1. Check fan speed in range with tolerance
             if rpm_real < rpm_min*(1-rpm_tolerance) or rpm_real > rpm_max*(1+rpm_tolerance):
@@ -1613,7 +1611,7 @@ class fan_sensor(system_device):
                         self.log.warn("{} tacho {}: {} too much different {}% than calculated {} pwm  {}".format(self.name,
                                                                                                                  tacho_idx,
                                                                                                                  rpm_real,
-                                                                                                                 rpm_diff*100,
+                                                                                                                 rpm_diff_norm*100,
                                                                                                                  rpm_calcuated,
                                                                                                                  pwm_curr))
                         return False
