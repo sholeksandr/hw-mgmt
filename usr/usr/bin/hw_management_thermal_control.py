@@ -110,8 +110,8 @@ class CONST(object):
     # suspend control file path
     SUSPEND_FILE = "config/suspend"
     # Sensor files for ambiant temperature measurement
-    FAN_SENS = "thermal/fan_amb"
-    PORT_SENS = "thermal/port_amb"
+    FAN_SENS = "fan_amb"
+    PORT_SENS = "port_amb"
 
     # Fan direction string alias
     # fan dir:
@@ -1801,8 +1801,9 @@ class ambiant_thermal_sensor(system_device):
         """
         pwm = self.pwm_min
 
-        # reading all amb sensors
-        for sensor_dir, sens_file_name in self.base_file_name.items():
+        # reading all amb8 sensors
+        for sensor_name, file_name in self.base_file_name.items():
+            sens_file_name = "thermal/{}".format(file_name)
             if not self.check_file(sens_file_name):
                 self.log.warn("{}: missing file {}".format(self.name, sens_file_name))
                 self.handle_reading_file_err(sens_file_name)
@@ -1811,13 +1812,14 @@ class ambiant_thermal_sensor(system_device):
                     temperature = int(self.read_file(sens_file_name))
                     self.handle_reading_file_err(sens_file_name, reset=True)
                     temperature /= CONST.TEMP_SENSOR_SCALE
-                    self.value_dict[sensor_dir] = int(temperature)
+                    self.value_dict[file_name] = int(temperature)
                     self.log.debug("{} {} value {}".format(self.name, sens_file_name, temperature))
                 except BaseException:
                     self.log.error("Error value reading from file: {}".format(self.base_file_name))
                     self.handle_reading_file_err(sens_file_name)
 
-        value = self.value_dict[self.flow_dir]
+        sensor_name_min = min(self.value_dict, key=self.value_dict.get)
+        value = self.value_dict[sensor_name_min]
         self.update_value(value)
 
         if self.value > self.val_max:
@@ -1855,12 +1857,12 @@ class ambiant_thermal_sensor(system_device):
         @summary: returning info about device state.
         """
         sens_val = ""
-        for key, val in self.base_file_name.items():
-            if key in self.value_dict.keys():
-                sens_val += "{}:{} ".format(val, self.value_dict[key])
+        sensor_name_min = min(self.value_dict, key=self.value_dict.get)
+        for key, val in self.value_dict.items():
+            sens_val += "{}:{} ".format(key, val)
         info_str = "\"{}\" {}({}), dir:{}, faults:[{}] pwm:{}, {}".format(self.name,
                                                                           sens_val,
-                                                                          self.value_dict[self.flow_dir],
+                                                                          self.value_dict[sensor_name_min],
                                                                           self.flow_dir,
                                                                           ",".join(self.fault_list),
                                                                           self.pwm,
