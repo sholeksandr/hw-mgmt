@@ -209,10 +209,11 @@ input_smooth_level - soothing level for sensor input value reading. Formula to c
 SENSOR_DEF_CONFIG = {
     r'psu\d+_fan':      {"type": "psu_fan_sensor",
                          "val_min": 4500, "val_max": 20000, "poll_time": 5,
-                         "input_suffix": "_fan1_speed_get",
+                         "input_suffix": "_fan1_speed_get", "refresh_attr_period": 1 * 60
                         },
     r'fan\d+':          {"type": "fan_sensor",
-                         "val_min": 4500, "val_max": 20000, "poll_time": 5
+                         "val_min": 4500, "val_max": 20000, "poll_time": 5,
+                         "refresh_attr_period": 1 * 60
                         },
     r'module\d+':       {"type": "thermal_module_sensor",
                          "pwm_min": 30, "pwm_max": 100, "val_min": 60000, "val_max": 80000, "poll_time": 20,
@@ -796,8 +797,7 @@ class system_device(hw_managemet_file_op):
         self.state = CONST.RUNNING
         self.pwm_min = int(self.sensors_config.get("pwm_min", CONST.PWM_MIN))
         self.pwm_max = int(self.sensors_config.get("pwm_max", CONST.PWM_MAX))
-        self.refresh_attr_period = self.sensors_config.get(
-            "refresh_attr_period", 0)
+        self.refresh_attr_period = self.sensors_config.get("refresh_attr_period", 0)
         if self.refresh_attr_period:
             self.refresh_timeout = current_milli_time() + self.refresh_attr_period * 1000
         else:
@@ -1297,14 +1297,23 @@ class psu_fan_sensor(system_device):
 
         self.fault_list = []
 
+    # ----------------------------------------------------------------------
     def sensor_configure(self):
         """
         @summary: this function calling on sensor start after initialization or suspend off
         """
         self.val_min = self.read_val_min_max("thermal/{}_fan_min".format(self.base_file_name), "val_min")
         self.val_max = self.read_val_min_max("thermal/{}_fan_max".format(self.base_file_name), "val_max")
-        self.fan_dir = self._read_dir()
+        self.refresh_attr()
         self.pwm_last = CONST.PWM_MIN
+        
+    # ----------------------------------------------------------------------
+    def refresh_attr(self):
+        """
+        @summary: refresh sensor attributes.
+        @return None
+        """
+        self.fan_dir = self._read_dir()
 
     # ----------------------------------------------------------------------
     def _read_dir(self):
@@ -1492,9 +1501,17 @@ class fan_sensor(system_device):
         self.pwm = self.pwm_min
         self.rpm_valid_state = True
         self.fan_dir_fail = False
-        self.fan_dir = self._read_dir()
         self.drwr_param = self._get_fan_drwr_param()
         self.fan_shutdown(False)
+        self.refresh_attr()
+
+    # ----------------------------------------------------------------------
+    def refresh_attr(self):
+        """
+        @summary: refresh sensor attributes.
+        @return None
+        """
+        self.fan_dir = self._read_dir()
 
     # ----------------------------------------------------------------------
     def _get_fan_drwr_param(self):
