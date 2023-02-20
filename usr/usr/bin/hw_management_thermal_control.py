@@ -1293,6 +1293,7 @@ class psu_fan_sensor(system_device):
         self.prsnt_err_pwm_min = self.get_file_val("config/pwm_min_psu_not_present")
         self.pwm_decode = sys_config.get(CONST.SYS_CONF_FAN_PWM, PSU_PWM_DECODE_DEF)
         self.fan_dir = CONST.C2P
+        self.pwm_last = CONST.PWM_MIN
 
         self.fault_list = []
 
@@ -1303,6 +1304,7 @@ class psu_fan_sensor(system_device):
         self.val_min = self.read_val_min_max("thermal/{}_fan_min".format(self.base_file_name), "val_min")
         self.val_max = self.read_val_min_max("thermal/{}_fan_max".format(self.base_file_name), "val_max")
         self.fan_dir = self._read_dir()
+        self.pwm_last = CONST.PWM_MIN
 
     # ----------------------------------------------------------------------
     def _read_dir(self):
@@ -1363,6 +1365,7 @@ class psu_fan_sensor(system_device):
             if psu_pwm < CONST.PWM_PSU_MIN:
                 psu_pwm = CONST.PWM_PSU_MIN
 
+            self.pwm_last = psu_pwm
             bus = self.read_file("config/{0}_i2c_bus".format(self.base_file_name))
             addr = self.read_file("config/{0}_i2c_addr".format(self.base_file_name))
             command = self.read_file("config/fan_command")
@@ -1396,6 +1399,7 @@ class psu_fan_sensor(system_device):
         """
         @summary: handle sensor error
         """
+        fault_list_old = self.fault_list
         self.fault_list = []
         psu_status = self._get_status()
         if psu_status == 0:
@@ -1407,6 +1411,10 @@ class psu_fan_sensor(system_device):
             else:
                 pwm = g_get_dmin(thermal_table, amb_tmp, [flow_dir, "psu_err", "present"])
             self.pwm = max(pwm, self.pwm)
+        elif "present" in fault_list_old:
+            # PSU returned back. Restole old PWM value
+            self.log.info("{} PWM restore to {}".format(self.name, self.pwm_last))
+            self.set_pwm(self.pwm_last)
 
         # truth table for fan direction
         #  FAN_DIR SYS_DIR     ERROR
@@ -1466,7 +1474,6 @@ class fan_sensor(system_device):
         self.rpm_relax_timestump = current_milli_time() + self.rpm_relax_timeout * 2
         self.name = "{}:{}".format(self.name, list(range(self.tacho_idx, self.tacho_idx + self.tacho_cnt)))
 
-        self.pwm_last = 0
         self.rpm_valid_state = True
 
         self.fault_list = []
@@ -1483,7 +1490,6 @@ class fan_sensor(system_device):
 
         self.fault_list = []
         self.pwm = self.pwm_min
-        self.pwm_last = 0
         self.rpm_valid_state = True
         self.fan_dir_fail = False
         self.fan_dir = self._read_dir()
