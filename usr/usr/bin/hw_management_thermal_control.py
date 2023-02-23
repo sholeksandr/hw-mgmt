@@ -1079,10 +1079,7 @@ class thermal_sensor(system_device):
         @summary: this function calling on sensor start after initialization or suspend off
         """
         self.val_min = self.read_val_min_max("{}_min".format(self.base_file_name), "val_min", CONST.TEMP_SENSOR_SCALE)
-        if  "sodimm" in self.name:
-            self.val_max = self.read_val_min_max("{}_max".format(self.base_file_name), "val_max", CONST.TEMP_SENSOR_SCALE)
-        else:
-            self.val_max = self.read_val_min_max("{}_max".format(self.base_file_name), "val_crit", CONST.TEMP_SENSOR_SCALE)
+        self.val_max = self.read_val_min_max("{}_max".format(self.base_file_name), "val_max", CONST.TEMP_SENSOR_SCALE)
 
     # ----------------------------------------------------------------------
     def handle_input(self, thermal_table, flow_dir, amb_tmp):
