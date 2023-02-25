@@ -1324,10 +1324,8 @@ class psu_fan_sensor(system_device):
             dir_val = self.read_file("thermal/{}_fan_dir".format(self.base_file_name))
             if dir_val == "0":
                 direction = CONST.C2P
-            elif dir_val == "1":
-                direction = CONST.P2C
             else:
-                direction = CONST.UNKNOWN
+                direction = CONST.P2C
         else:
             direction = CONST.UNKNOWN
         return direction
